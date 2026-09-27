@@ -1,0 +1,443 @@
+<Page
+    x:Class="PkgRelay.Views.PkgPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:models="using:PkgRelay.Models"
+    xmlns:converters="using:PkgRelay.Converters"
+    NavigationCacheMode="Required"
+    AllowDrop="True"
+    DragOver="Page_DragOver"
+    Drop="Page_Drop">
+
+    <Page.Resources>
+        <converters:InstallStatusBrushConverter
+            x:Key="InstallStatusBrushConverter"/>
+
+        <Style
+            x:Key="PkgQueueItemStyle"
+            TargetType="ListViewItem">
+            <Setter
+                Property="HorizontalContentAlignment"
+                Value="Stretch"/>
+            <Setter
+                Property="Padding"
+                Value="0"/>
+        </Style>
+
+        <Style
+            x:Key="PkgQueueItemBorderedStyle"
+            TargetType="ListViewItem">
+            <Setter
+                Property="HorizontalContentAlignment"
+                Value="Stretch"/>
+            <Setter
+                Property="Padding"
+                Value="0"/>
+            <Setter
+                Property="BorderBrush"
+                Value="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+            <Setter
+                Property="BorderThickness"
+                Value="0,0,0,1"/>
+        </Style>
+    </Page.Resources>
+
+    <Grid
+        Padding="24,0,24,24"
+        RowSpacing="12"
+        Background="Transparent"
+        AllowDrop="True"
+        DragOver="Page_DragOver"
+        Drop="Page_Drop">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel
+            VerticalAlignment="Center"
+            Spacing="2">
+            <TextBlock
+                Text="PKG"
+                Style="{ThemeResource TitleTextBlockStyle}"/>
+            <TextBlock
+                Text="{x:Bind QueueSummaryText, Mode=OneWay}"
+                Opacity="0.72"/>
+        </StackPanel>
+
+        <InfoBar
+            x:Name="StatusBar"
+            Grid.Row="1"
+            IsOpen="False"/>
+
+        <Grid
+            Grid.Row="2"
+            ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="320"/>
+                <ColumnDefinition Width="180"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBox
+                x:Name="QueueSearchBox"
+                PlaceholderText="Search title, CUSA or content ID"
+                ToolTipService.ToolTip="Filter the package queue"
+                TextChanged="QueueSearchBox_TextChanged"/>
+
+            <ComboBox
+                x:Name="QueueFilterBox"
+                Grid.Column="1"
+                SelectedIndex="0"
+                ToolTipService.ToolTip="Filter packages by status"
+                SelectionChanged="QueueFilterBox_SelectionChanged">
+                <ComboBoxItem Content="All" Tag="all"/>
+                <ComboBoxItem Content="Waiting" Tag="waiting"/>
+                <ComboBoxItem Content="Active" Tag="active"/>
+                <ComboBoxItem Content="Failed" Tag="failed"/>
+                <ComboBoxItem Content="Completed" Tag="completed"/>
+            </ComboBox>
+
+            <TextBlock
+                x:Name="SelectionSummaryText"
+                Grid.Column="3"
+                VerticalAlignment="Center"
+                Visibility="Collapsed"
+                Opacity="0.68"/>
+
+            <StackPanel
+                x:Name="SelectionActionsPanel"
+                Grid.Column="4"
+                Orientation="Horizontal"
+                Spacing="2"
+                Visibility="Collapsed">
+
+                <StackPanel.Transitions>
+                    <TransitionCollection>
+                        <EntranceThemeTransition
+                            FromHorizontalOffset="12"
+                            IsStaggeringEnabled="False"/>
+                    </TransitionCollection>
+                </StackPanel.Transitions>
+
+                <AppBarButton
+                    x:Name="RetrySelectedButton"
+                    Icon="RepeatAll"
+                    Label="Retry"
+                    ToolTipService.ToolTip="Retry selected failed or cancelled packages"
+                    Click="RetrySelected_Click"/>
+
+                <AppBarButton
+                    x:Name="CancelSelectedButton"
+                    Icon="Cancel"
+                    Label="Cancel"
+                    ToolTipService.ToolTip="Cancel selected packages"
+                    Click="CancelSelected_Click"/>
+
+                <AppBarButton
+                    x:Name="RemoveSelectedButton"
+                    Icon="Delete"
+                    Label="Remove"
+                    ToolTipService.ToolTip="Remove selected non-active packages"
+                    Click="RemoveSelected_Click"/>
+            </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="3">
+            <Border
+                x:Name="QueueListHost"
+                CornerRadius="4"
+                BorderThickness="0">
+
+                <ListView
+                    x:Name="QueueList"
+                    SelectionMode="None"
+                    CanDragItems="True"
+                    CanReorderItems="True"
+                    AllowDrop="True"
+                    ItemContainerStyle="{StaticResource PkgQueueItemStyle}"
+                    Visibility="{x:Bind QueueListVisibility, Mode=OneTime}">
+
+                    <ListView.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <ItemsStackPanel>
+                                <ItemsStackPanel.ChildrenTransitions>
+                                    <TransitionCollection>
+                                        <AddDeleteThemeTransition/>
+                                        <ReorderThemeTransition/>
+                                    </TransitionCollection>
+                                </ItemsStackPanel.ChildrenTransitions>
+                            </ItemsStackPanel>
+                        </ItemsPanelTemplate>
+                    </ListView.ItemsPanel>
+
+                    <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="models:InstallJob">
+                        <Grid Padding="12,10" ColumnSpacing="14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34"/>
+                                <ColumnDefinition Width="40"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="220"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <CheckBox
+                                Grid.Column="0"
+                                Tag="{x:Bind}"
+                                VerticalAlignment="Center"
+                                HorizontalAlignment="Center"
+                                ToolTipService.ToolTip="Select package"
+                                Loaded="SelectionCheckBox_Loaded"
+                                Checked="SelectionCheckBox_Checked"
+                                Unchecked="SelectionCheckBox_Unchecked"/>
+
+                            <TextBlock
+                                Grid.Column="1"
+                                Text="{x:Bind QueuePositionText, Mode=OneWay}"
+                                VerticalAlignment="Center"
+                                FontWeight="SemiBold"
+                                Opacity="0.55"/>
+
+                            <StackPanel Grid.Column="2" Spacing="2">
+                                <TextBlock
+                                    Text="{x:Bind DisplayName}"
+                                    FontWeight="SemiBold"
+                                    TextTrimming="CharacterEllipsis"/>
+
+                                <TextBlock
+                                    Text="{x:Bind PackageIdentity}"
+                                    Opacity="0.68"
+                                    TextTrimming="CharacterEllipsis"/>
+
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock
+                                        Text="{x:Bind SizeText}"
+                                        Opacity="0.55"/>
+                                    <TextBlock
+                                        Text="{x:Bind Message, Mode=OneWay}"
+                                        Opacity="0.55"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <Border
+                                Grid.Column="3"
+                                Margin="0,0,10,0"
+                                Padding="8,3"
+                                MinWidth="76"
+                                CornerRadius="4"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Background="{x:Bind Status, Mode=OneWay, Converter={StaticResource InstallStatusBrushConverter}}">
+
+                                <TextBlock
+                                    Text="{x:Bind StatusText, Mode=OneWay}"
+                                    HorizontalAlignment="Center"
+                                    FontSize="12"
+                                    FontWeight="SemiBold"
+                                    Foreground="{x:Bind Status, Mode=OneWay, Converter={StaticResource InstallStatusBrushConverter}, ConverterParameter=Foreground}"/>
+                            </Border>
+
+                            <StackPanel
+                                Grid.Column="4"
+                                VerticalAlignment="Center"
+                                Spacing="4">
+                                <ProgressBar
+                                    Minimum="0"
+                                    Maximum="100"
+                                    Value="{x:Bind Progress, Mode=OneWay}"/>
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock
+                                        Text="{x:Bind TransferDetailsText, Mode=OneWay}"
+                                        TextTrimming="CharacterEllipsis"
+                                        Opacity="0.55"/>
+
+                                    <TextBlock
+                                        Grid.Column="1"
+                                        Text="{x:Bind ProgressText, Mode=OneWay}"
+                                        HorizontalAlignment="Right"
+                                        Opacity="0.55"/>
+                                </Grid>
+                            </StackPanel>
+
+                            <Button
+                                Grid.Column="5"
+                                Width="36"
+                                Height="36"
+                                Padding="0"
+                                VerticalAlignment="Center"
+                                ToolTipService.ToolTip="Package actions">
+                                <FontIcon
+                                    FontFamily="Segoe Fluent Icons"
+                                    Glyph="&#xE712;"/>
+
+                                <Button.Flyout>
+                                    <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                        <MenuFlyoutItem
+                                            Text="Move earlier"
+                                            Tag="{x:Bind}"
+                                            IsEnabled="{x:Bind CanMove, Mode=OneWay}"
+                                            Click="MoveUp_Click">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon
+                                                    FontFamily="Segoe Fluent Icons"
+                                                    Glyph="&#xE70E;"/>
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                        <MenuFlyoutItem
+                                            Text="Move later"
+                                            Tag="{x:Bind}"
+                                            IsEnabled="{x:Bind CanMove, Mode=OneWay}"
+                                            Click="MoveDown_Click">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon
+                                                    FontFamily="Segoe Fluent Icons"
+                                                    Glyph="&#xE70D;"/>
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                        <MenuFlyoutItem
+                                            Text="Move to top"
+                                            Tag="{x:Bind}"
+                                            IsEnabled="{x:Bind CanMove, Mode=OneWay}"
+                                            Click="MoveTop_Click">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon
+                                                    FontFamily="Segoe Fluent Icons"
+                                                    Glyph="&#xE74A;"/>
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                        <MenuFlyoutItem
+                                            Text="Move to bottom"
+                                            Tag="{x:Bind}"
+                                            IsEnabled="{x:Bind CanMove, Mode=OneWay}"
+                                            Click="MoveBottom_Click">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon
+                                                    FontFamily="Segoe Fluent Icons"
+                                                    Glyph="&#xE74B;"/>
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+
+                                        <MenuFlyoutSeparator/>
+
+                                        <MenuFlyoutItem
+                                            Text="Pause"
+                                            Tag="{x:Bind}"
+                                            IsEnabled="{x:Bind CanPause, Mode=OneWay}"
+                                            Click="Pause_Click">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon
+                                                    FontFamily="Segoe Fluent Icons"
+                                                    Glyph="&#xE769;"/>
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                        <MenuFlyoutItem
+                                            Text="Resume"
+                                            Tag="{x:Bind}"
+                                            IsEnabled="{x:Bind CanResume, Mode=OneWay}"
+                                            Click="Resume_Click">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon
+                                                    FontFamily="Segoe Fluent Icons"
+                                                    Glyph="&#xE768;"/>
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                        <MenuFlyoutItem
+                                            Text="Cancel"
+                                            Tag="{x:Bind}"
+                                            IsEnabled="{x:Bind CanCancel, Mode=OneWay}"
+                                            Click="Cancel_Click">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon
+                                                    FontFamily="Segoe Fluent Icons"
+                                                    Glyph="&#xE711;"/>
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+
+                                        <MenuFlyoutSeparator/>
+
+                                        <MenuFlyoutItem
+                                            Text="Retry"
+                                            Tag="{x:Bind}"
+                                            IsEnabled="{x:Bind CanRetry, Mode=OneWay}"
+                                            Click="Retry_Click">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon
+                                                    FontFamily="Segoe Fluent Icons"
+                                                    Glyph="&#xE72C;"/>
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                        <MenuFlyoutItem
+                                            Text="Remove"
+                                            Tag="{x:Bind}"
+                                            Click="Remove_Click">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon
+                                                    FontFamily="Segoe Fluent Icons"
+                                                    Glyph="&#xE74D;"/>
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                    </MenuFlyout>
+                                </Button.Flyout>
+                            </Button>
+                        </Grid>
+                    </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </Border>
+
+            <Border
+                x:Name="EmptyQueueDropSurface"
+                Background="Transparent"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                AllowDrop="True"
+                DragOver="Page_DragOver"
+                Drop="Page_Drop"
+                Visibility="{x:Bind EmptyQueueVisibility, Mode=OneTime}">
+
+                <Border.Transitions>
+                    <TransitionCollection>
+                        <EntranceThemeTransition
+                            FromVerticalOffset="10"
+                            IsStaggeringEnabled="False"/>
+                    </TransitionCollection>
+                </Border.Transitions>
+
+                <StackPanel
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Spacing="10"
+                    MaxWidth="420">
+
+                    <TextBlock
+                        Text="No packages in the queue"
+                        Style="{ThemeResource SubtitleTextBlockStyle}"
+                        HorizontalAlignment="Center"/>
+
+                    <TextBlock
+                        Text="Drop PKG files or folders anywhere in this area, or use Add PKG."
+                        TextAlignment="Center"
+                        TextWrapping="Wrap"
+                        Opacity="0.68"/>
+
+                    <Button
+                        Content="Add PKG"
+                        HorizontalAlignment="Center"
+                        ToolTipService.ToolTip="Add one or more PKG files"
+                        Click="AddPkg_Click"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</Page>

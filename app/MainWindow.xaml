@@ -1,0 +1,112 @@
+<Window
+    x:Class="PkgRelay.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="PKG Relay">
+
+    <Window.SystemBackdrop>
+        <MicaBackdrop Kind="Base"/>
+    </Window.SystemBackdrop>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="32"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Grid
+            x:Name="AppTitleBar"
+            Grid.Row="0"
+            Padding="12,0,148,0"
+            Background="Transparent">
+
+            <StackPanel
+                Orientation="Horizontal"
+                Spacing="8"
+                VerticalAlignment="Center">
+
+                <FontIcon
+                    FontFamily="Segoe Fluent Icons"
+                    Glyph="&#xE7B8;"
+                    FontSize="14"/>
+
+                <TextBlock
+                    Text="PKG Relay"
+                    VerticalAlignment="Center"/>
+            </StackPanel>
+        </Grid>
+
+        <Grid
+            Grid.Row="1"
+            Margin="12,4,12,0"
+            ColumnSpacing="12">
+
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <SelectorBar
+                x:Name="SectionSelector"
+                SelectionChanged="SectionSelector_SelectionChanged">
+
+                <SelectorBarItem
+                    x:Name="PkgSelectorItem"
+                    Text="PKG"
+                    Tag="pkg"
+                    ToolTipService.ToolTip="Package queue">
+                    <SelectorBarItem.Icon>
+                        <FontIcon
+                            FontFamily="Segoe Fluent Icons"
+                            Glyph="&#xE8B7;"/>
+                    </SelectorBarItem.Icon>
+                </SelectorBarItem>
+
+                <SelectorBarItem
+                    x:Name="HomebrewSelectorItem"
+                    Text="Homebrew"
+                    Tag="homebrew"
+                    Visibility="Collapsed"
+                    ToolTipService.ToolTip="Homebrew catalog">
+                    <SelectorBarItem.Icon>
+                        <FontIcon
+                            FontFamily="Segoe Fluent Icons"
+                            Glyph="&#xE719;"/>
+                    </SelectorBarItem.Icon>
+                </SelectorBarItem>
+
+                <SelectorBarItem
+                    x:Name="SettingsSelectorItem"
+                    Text="Settings"
+                    Tag="settings"
+                    ToolTipService.ToolTip="Application settings">
+                    <SelectorBarItem.Icon>
+                        <FontIcon
+                            FontFamily="Segoe Fluent Icons"
+                            Glyph="&#xE713;"/>
+                    </SelectorBarItem.Icon>
+                </SelectorBarItem>
+            </SelectorBar>
+
+            <CommandBar
+                x:Name="ShellCommandBar"
+                Grid.Column="1"
+                Background="Transparent"
+                DefaultLabelPosition="Right"
+                VerticalAlignment="Center"/>
+        </Grid>
+
+        <InfoBar
+            x:Name="ShellInfoBar"
+            Grid.Row="2"
+            Margin="24,0,24,0"
+            IsOpen="False"/>
+
+        <Frame
+            x:Name="ContentFrame"
+            Grid.Row="3"
+            CacheSize="3"/>
+    </Grid>
+</Window>

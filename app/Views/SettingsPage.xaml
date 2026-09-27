@@ -1,0 +1,652 @@
+<Page
+    x:Class="PkgRelay.Views.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    NavigationCacheMode="Required">
+
+    <Grid Padding="24,0,24,24" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel
+            VerticalAlignment="Center"
+            Spacing="2">
+            <TextBlock
+                Text="Settings"
+                Style="{ThemeResource TitleTextBlockStyle}"/>
+            <TextBlock
+                Text="Changes are saved automatically."
+                Opacity="0.72"/>
+        </StackPanel>
+
+        <InfoBar
+            x:Name="ResultBar"
+            Grid.Row="1"
+            IsOpen="False"/>
+
+        <NavigationView
+            x:Name="SettingsIndex"
+            Grid.Row="2"
+            PaneDisplayMode="Left"
+            IsPaneOpen="True"
+            IsPaneToggleButtonVisible="False"
+            IsBackButtonVisible="Collapsed"
+            IsSettingsVisible="False"
+            AlwaysShowHeader="False"
+            OpenPaneLength="220"
+            SelectionChanged="SettingsIndex_SelectionChanged">
+
+            <NavigationView.MenuItems>
+                <NavigationViewItem
+                    x:Name="PlayStationNavItem"
+                    Content="PlayStation"
+                    Tag="playstation"
+                    PointerWheelChanged="SettingsCategory_PointerWheelChanged">
+                    <NavigationViewItem.Icon>
+                        <FontIcon
+                            FontFamily="Segoe Fluent Icons"
+                            Glyph="&#xE7FC;"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem
+                    x:Name="PackageServerNavItem"
+                    Content="Package server"
+                    Tag="server"
+                    Icon="Folder"
+                    PointerWheelChanged="SettingsCategory_PointerWheelChanged"/>
+
+                <NavigationViewItem
+                    x:Name="RpiBehaviorNavItem"
+                    Content="RPI behavior"
+                    Tag="rpi"
+                    PointerWheelChanged="SettingsCategory_PointerWheelChanged">
+                    <NavigationViewItem.Icon>
+                        <FontIcon
+                            FontFamily="Segoe Fluent Icons"
+                            Glyph="&#xE950;"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem
+                    x:Name="GeneralNavItem"
+                    Content="General"
+                    Tag="general"
+                    Icon="Setting"
+                    PointerWheelChanged="SettingsCategory_PointerWheelChanged"/>
+
+                <NavigationViewItem
+                    x:Name="HomebrewNavItem"
+                    Content="Homebrew"
+                    Tag="homebrew"
+                    Icon="Shop"
+                    PointerWheelChanged="SettingsCategory_PointerWheelChanged"/>
+
+                <NavigationViewItem
+                    x:Name="DiagnosticsNavItem"
+                    Content="Diagnostics"
+                    Tag="diagnostics"
+                    PointerWheelChanged="SettingsCategory_PointerWheelChanged">
+                    <NavigationViewItem.Icon>
+                        <FontIcon
+                            FontFamily="Segoe Fluent Icons"
+                            Glyph="&#xE9D9;"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
+
+            <Grid Padding="24,8,24,24">
+                <!-- PlayStation -->
+                <ScrollViewer
+                    x:Name="PlayStationPanel"
+                    VerticalScrollBarVisibility="Auto">
+
+                    <ScrollViewer.Transitions>
+                        <TransitionCollection>
+                            <EntranceThemeTransition
+                                FromHorizontalOffset="14"
+                                IsStaggeringEnabled="False"/>
+                        </TransitionCollection>
+                    </ScrollViewer.Transitions>
+
+                    <StackPanel
+                        Width="760"
+                        MaxWidth="760"
+                        HorizontalAlignment="Left"
+                        Spacing="20">
+
+                        <TextBlock
+                            Text="PlayStation"
+                            Style="{ThemeResource TitleTextBlockStyle}"/>
+
+                        <Grid ColumnSpacing="24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="280"/>
+                                <ColumnDefinition Width="420"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel>
+                                <TextBlock
+                                    Text="PS4 IPv4 address"
+                                    Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                                <TextBlock
+                                    Text="Address of the console running Remote Package Installer."
+                                    TextWrapping="Wrap"
+                                    Opacity="0.65"/>
+                            </StackPanel>
+
+                            <TextBox
+                                x:Name="Ps4AddressBox"
+                                Grid.Column="1"
+                                PlaceholderText="192.168.1.100"
+                                TextChanged="TextSettingChanged"/>
+                        </Grid>
+
+                        <Grid ColumnSpacing="24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="280"/>
+                                <ColumnDefinition Width="420"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock
+                                Text="RPI port"
+                                Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+
+                            <NumberBox
+                                x:Name="RpiPortBox"
+                                Grid.Column="1"
+                                Minimum="1"
+                                Maximum="65535"
+                                ValueChanged="NumberSettingChanged"/>
+                        </Grid>
+
+                        <Grid ColumnSpacing="24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="280"/>
+                                <ColumnDefinition Width="420"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel>
+                                <TextBlock
+                                    Text="Automatic install"
+                                    Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                                <TextBlock
+                                    Text="Start the queue after a package is added."
+                                    TextWrapping="Wrap"
+                                    Opacity="0.65"/>
+                            </StackPanel>
+
+                            <ToggleSwitch
+                                x:Name="AutoStartPackagesToggle"
+                                Grid.Column="1"
+                                HorizontalAlignment="Left"
+                                Toggled="ToggleSettingChanged"/>
+                        </Grid>
+
+                        <Grid ColumnSpacing="24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="280"/>
+                                <ColumnDefinition Width="420"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel>
+                                <TextBlock
+                                    Text="Automatic PS4 rediscovery"
+                                    Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                                <TextBlock
+                                    Text="After 4 failed connection checks, scan the local network for Remote Package Installer. A single match is saved and used automatically."
+                                    TextWrapping="Wrap"
+                                    Opacity="0.65"/>
+                            </StackPanel>
+
+                            <ToggleSwitch
+                                x:Name="AutoDiscoverPs4Toggle"
+                                Grid.Column="1"
+                                HorizontalAlignment="Left"
+                                ToolTipService.ToolTip="Automatically find and update the PS4 address after four failed connection checks"
+                                Toggled="ToggleSettingChanged"/>
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- Package server -->
+                <ScrollViewer
+                    x:Name="PackageServerPanel"
+                    Visibility="Collapsed"
+                    VerticalScrollBarVisibility="Auto">
+
+                    <ScrollViewer.Transitions>
+                        <TransitionCollection>
+                            <EntranceThemeTransition
+                                FromHorizontalOffset="14"
+                                IsStaggeringEnabled="False"/>
+                        </TransitionCollection>
+                    </ScrollViewer.Transitions>
+
+                    <StackPanel
+                        Width="760"
+                        MaxWidth="760"
+                        HorizontalAlignment="Left"
+                        Spacing="20">
+
+                        <TextBlock
+                            Text="Package server"
+                            Style="{ThemeResource TitleTextBlockStyle}"/>
+
+                        <Grid ColumnSpacing="24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="280"/>
+                                <ColumnDefinition Width="420"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel>
+                                <TextBlock
+                                    Text="Local IPv4 address"
+                                    Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                                <TextBlock
+                                    Text="Leave empty to select the network route automatically."
+                                    TextWrapping="Wrap"
+                                    Opacity="0.65"/>
+                            </StackPanel>
+
+                            <TextBox
+                                x:Name="LocalAddressBox"
+                                Grid.Column="1"
+                                PlaceholderText="Automatic"
+                                TextChanged="TextSettingChanged"/>
+                        </Grid>
+
+                        <Grid ColumnSpacing="24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="280"/>
+                                <ColumnDefinition Width="420"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock
+                                Text="HTTP server port"
+                                Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+
+                            <NumberBox
+                                x:Name="HttpPortBox"
+                                Grid.Column="1"
+                                Minimum="1"
+                                Maximum="65535"
+                                ValueChanged="NumberSettingChanged"/>
+                        </Grid>
+
+                        <Grid ColumnSpacing="24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="280"/>
+                                <ColumnDefinition Width="420"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel>
+                                <TextBlock
+                                    Text="Default PKG folder"
+                                    Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                                <TextBlock
+                                    Text="Optional folder used as the package-library location."
+                                    TextWrapping="Wrap"
+                                    Opacity="0.65"/>
+                            </StackPanel>
+
+                            <Grid
+                                Grid.Column="1"
+                                ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBox
+                                    x:Name="PackageFolderBox"
+                                    TextChanged="TextSettingChanged"/>
+
+                                <Button
+                                    Grid.Column="1"
+                                    Width="40"
+                                    Height="32"
+                                    Padding="0"
+                                    ToolTipService.ToolTip="Choose the default PKG folder"
+                                    Click="BrowsePackageFolder_Click">
+                                    <FontIcon
+                                        FontFamily="Segoe Fluent Icons"
+                                        Glyph="&#xE8B7;"/>
+                                </Button>
+                            </Grid>
+                        </Grid>
+
+                        <Grid ColumnSpacing="24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="280"/>
+                                <ColumnDefinition Width="420"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock
+                                Text="Recursive folder scan"
+                                Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+
+                            <ToggleSwitch
+                                x:Name="RecursiveScanToggle"
+                                Grid.Column="1"
+                                HorizontalAlignment="Left"
+                                Toggled="ToggleSettingChanged"/>
+                        </Grid>
+
+                        <Grid ColumnSpacing="24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="280"/>
+                                <ColumnDefinition Width="420"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel>
+                                <TextBlock
+                                    Text="Watch default PKG folder"
+                                    Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                                <TextBlock
+                                    Text="Automatically add new PKG files after they finish copying into the default folder."
+                                    TextWrapping="Wrap"
+                                    Opacity="0.65"/>
+                            </StackPanel>
+
+                            <ToggleSwitch
+                                x:Name="WatchDefaultPkgFolderToggle"
+                                Grid.Column="1"
+                                HorizontalAlignment="Left"
+                                ToolTipService.ToolTip="Automatically add new PKG files from the default folder"
+                                Toggled="ToggleSettingChanged"/>
+                        </Grid>
+
+                        <Grid ColumnSpacing="24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="280"/>
+                                <ColumnDefinition Width="420"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel>
+                                <TextBlock
+                                    Text="PKG list borders"
+                                    Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                                <TextBlock
+                                    Text="Draw a border around the queue and separators between package rows."
+                                    TextWrapping="Wrap"
+                                    Opacity="0.65"/>
+                            </StackPanel>
+
+                            <ToggleSwitch
+                                x:Name="ShowPkgListBordersToggle"
+                                Grid.Column="1"
+                                HorizontalAlignment="Left"
+                                Toggled="ToggleSettingChanged"/>
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- RPI behavior -->
+                <ScrollViewer
+                    x:Name="RpiBehaviorPanel"
+                    Visibility="Collapsed"
+                    VerticalScrollBarVisibility="Auto">
+
+                    <ScrollViewer.Transitions>
+                        <TransitionCollection>
+                            <EntranceThemeTransition
+                                FromHorizontalOffset="14"
+                                IsStaggeringEnabled="False"/>
+                        </TransitionCollection>
+                    </ScrollViewer.Transitions>
+
+                    <StackPanel
+                        Width="760"
+                        MaxWidth="760"
+                        HorizontalAlignment="Left"
+                        Spacing="20">
+
+                        <TextBlock
+                            Text="RPI behavior"
+                            Style="{ThemeResource TitleTextBlockStyle}"/>
+
+                        <Grid ColumnSpacing="24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="280"/>
+                                <ColumnDefinition Width="420"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock
+                                Text="Request timeout"
+                                Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+
+                            <NumberBox
+                                x:Name="TimeoutBox"
+                                Grid.Column="1"
+                                Minimum="1000"
+                                Maximum="30000"
+                                SpinButtonPlacementMode="Compact"
+                                ValueChanged="NumberSettingChanged"/>
+                        </Grid>
+
+                        <Grid ColumnSpacing="24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="280"/>
+                                <ColumnDefinition Width="420"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock
+                                Text="Progress polling interval"
+                                Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+
+                            <NumberBox
+                                x:Name="PollIntervalBox"
+                                Grid.Column="1"
+                                Minimum="1000"
+                                Maximum="15000"
+                                SpinButtonPlacementMode="Compact"
+                                ValueChanged="NumberSettingChanged"/>
+                        </Grid>
+
+                        <Grid ColumnSpacing="24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="280"/>
+                                <ColumnDefinition Width="420"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel>
+                                <TextBlock
+                                    Text="Monitoring warning threshold"
+                                    Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                                <TextBlock
+                                    Text="Consecutive failed progress checks before a warning is shown. The accepted install is not cancelled."
+                                    TextWrapping="Wrap"
+                                    Opacity="0.65"/>
+                            </StackPanel>
+
+                            <NumberBox
+                                x:Name="ProgressFailuresBox"
+                                Grid.Column="1"
+                                Minimum="1"
+                                Maximum="100"
+                                SpinButtonPlacementMode="Compact"
+                                ValueChanged="NumberSettingChanged"/>
+                        </Grid>
+
+                        <InfoBar
+                            IsOpen="True"
+                            IsClosable="False"
+                            Severity="Informational"
+                            Title="Connection preflight"
+                            Message="The app checks the PS4 connection up to four times before sending an install request."/>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- General -->
+                <ScrollViewer
+                    x:Name="GeneralPanel"
+                    Visibility="Collapsed"
+                    VerticalScrollBarVisibility="Auto">
+
+                    <ScrollViewer.Transitions>
+                        <TransitionCollection>
+                            <EntranceThemeTransition
+                                FromHorizontalOffset="14"
+                                IsStaggeringEnabled="False"/>
+                        </TransitionCollection>
+                    </ScrollViewer.Transitions>
+
+                    <StackPanel
+                        Width="760"
+                        MaxWidth="760"
+                        HorizontalAlignment="Left"
+                        Spacing="20">
+
+                        <TextBlock
+                            Text="General"
+                            Style="{ThemeResource TitleTextBlockStyle}"/>
+
+                        <Grid ColumnSpacing="24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="280"/>
+                                <ColumnDefinition Width="420"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel>
+                                <TextBlock
+                                    Text="Homebrew tab"
+                                    Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                                <TextBlock
+                                    Text="Show Homebrew in the top selector."
+                                    TextWrapping="Wrap"
+                                    Opacity="0.65"/>
+                            </StackPanel>
+
+                            <ToggleSwitch
+                                x:Name="ShowHomebrewTabToggle"
+                                Grid.Column="1"
+                                HorizontalAlignment="Left"
+                                Toggled="ToggleSettingChanged"/>
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- Homebrew -->
+                <ScrollViewer
+                    x:Name="HomebrewPanel"
+                    Visibility="Collapsed"
+                    VerticalScrollBarVisibility="Auto">
+
+                    <ScrollViewer.Transitions>
+                        <TransitionCollection>
+                            <EntranceThemeTransition
+                                FromHorizontalOffset="14"
+                                IsStaggeringEnabled="False"/>
+                        </TransitionCollection>
+                    </ScrollViewer.Transitions>
+
+                    <StackPanel
+                        Width="760"
+                        MaxWidth="760"
+                        HorizontalAlignment="Left"
+                        Spacing="20">
+
+                        <TextBlock
+                            Text="Homebrew"
+                            Style="{ThemeResource TitleTextBlockStyle}"/>
+
+                        <Grid ColumnSpacing="24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="280"/>
+                                <ColumnDefinition Width="420"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel>
+                                <TextBlock
+                                    Text="Catalog URL"
+                                    Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                                <TextBlock
+                                    Text="JSON catalog used by the optional Homebrew tab."
+                                    TextWrapping="Wrap"
+                                    Opacity="0.65"/>
+                            </StackPanel>
+
+                            <TextBox
+                                x:Name="HomebrewApiBox"
+                                Grid.Column="1"
+                                TextChanged="TextSettingChanged"/>
+                        </Grid>
+
+                        <Grid ColumnSpacing="24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="280"/>
+                                <ColumnDefinition Width="420"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock
+                                Text="Download folder"
+                                Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+
+                            <TextBox
+                                x:Name="HomebrewFolderBox"
+                                Grid.Column="1"
+                                TextChanged="TextSettingChanged"/>
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- Diagnostics -->
+                <ScrollViewer
+                    x:Name="DiagnosticsPanel"
+                    Visibility="Collapsed"
+                    VerticalScrollBarVisibility="Auto">
+
+                    <ScrollViewer.Transitions>
+                        <TransitionCollection>
+                            <EntranceThemeTransition
+                                FromHorizontalOffset="14"
+                                IsStaggeringEnabled="False"/>
+                        </TransitionCollection>
+                    </ScrollViewer.Transitions>
+
+                    <StackPanel
+                        Width="760"
+                        MaxWidth="760"
+                        HorizontalAlignment="Left"
+                        Spacing="20">
+
+                        <TextBlock
+                            Text="Diagnostics"
+                            Style="{ThemeResource TitleTextBlockStyle}"/>
+
+                        <TextBlock
+                            Text="Validate the PC-to-PS4 control path, local package-server route and HTTP bind before starting a large transfer."
+                            TextWrapping="Wrap"
+                            Opacity="0.72"/>
+
+                        <Button
+                            Content="Run diagnostics"
+                            HorizontalAlignment="Left"
+                            ToolTipService.ToolTip="Test the configured PS4, network route and local package-server endpoint"
+                            Click="RunDiagnostics_Click"/>
+
+                        <ProgressRing
+                            x:Name="DiagnosticsProgressRing"
+                            IsActive="False"
+                            Visibility="Collapsed"
+                            Width="24"
+                            Height="24"
+                            HorizontalAlignment="Left"/>
+
+                        <InfoBar
+                            x:Name="DiagnosticsResultBar"
+                            IsOpen="False"/>
+
+                        <StackPanel
+                            x:Name="DiagnosticsResultsPanel"
+                            Spacing="12"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </NavigationView>
+    </Grid>
+</Page>
