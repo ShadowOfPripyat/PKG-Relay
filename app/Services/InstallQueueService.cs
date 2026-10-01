@@ -14,19 +14,20 @@ public sealed class InstallQueueService : IAsyncDisposable
     private readonly PkgMetadataService _metadata;
     private readonly QueueStoreService _store;
     private readonly Ps4RpiClient _rpi;
+    private readonly InstalledPackageVerifier _installed;
 
-    private readonly SemaphoreSlim _runGate = new(1, 1);
+    private readonly PkgQueueScheduler _scheduler;
     private readonly CancellationTokenSource _lifetime = new();
 
     private UiDispatcher? _ui;
-    private bool _running;
+    private readonly Task _reconciliation;
 
     public ObservableCollection<InstallJob> Jobs { get; } = new();
 
     public event EventHandler<QueueErrorEventArgs>? ErrorOccurred;
     public event EventHandler<QueueErrorEventArgs>? WarningOccurred;
 
-    public bool IsRunning => _running;
+    public bool IsRunning => _scheduler.IsRunning;
 
     public InstallQueueService(
         SettingsService settings,
@@ -44,6 +45,10 @@ public sealed class InstallQueueService : IAsyncDisposable
         _metadata = metadata;
         _store = store;
         _rpi = rpi;
+        _installed = new InstalledPackageVerifier(settings);
+        _scheduler = new PkgQueueScheduler(GetJobsSnapshotAsync,
+            () => _settings.Current.ConsoleQueueLimit, StartJobWorkerAsync);
+        _reconciliation = ReconcileFailedJobsAsync();
     }
 
     public void AttachDispatcher(UiDispatcher dispatcher)
@@ -59,6 +64,20 @@ public sealed class InstallQueueService : IAsyncDisposable
             await AddOnUiAsync(job);
 
         await ReindexAsync();
+
+        foreach (var job in jobs.Where(NeedsPackageSource)
+                     .OrderBy(x => string.IsNullOrWhiteSpace(x.PackageUri)))
+        {
+            try
+            {
+                await RestorePackageRouteAsync(job, _lifetime.Token);
+            }
+            catch (Exception ex) when (!_lifetime.IsCancellationRequested)
+            {
+                await _log.WarningAsync($"Package source restore failed for {job.DisplayName}: {ex.Message}");
+                await ReportWarningAsync("Package source unavailable", ex.Message, job);
+            }
+        }
 
         if (Jobs.Any(x =>
                 x.Status is
@@ -204,81 +223,64 @@ public sealed class InstallQueueService : IAsyncDisposable
         return job;
     }
 
-    public async Task StartPendingAsync(
-        CancellationToken cancellationToken = default)
+    public void Start() => _ = StartPendingSafelyAsync();
+
+    public async Task StartPendingAsync(CancellationToken cancellationToken = default)
     {
-        if (!await _runGate.WaitAsync(0, cancellationToken))
-            return;
-
-        _running = true;
-
-        using var linked =
-            CancellationTokenSource.CreateLinkedTokenSource(
-                _lifetime.Token,
-                cancellationToken);
-
-        try
-        {
-            while (true)
-            {
-                var next = await GetNextWaitingAsync();
-
-                if (next is null)
-                    break;
-
-                try
-                {
-                    await ProcessJobAsync(next, linked.Token);
-                }
-                catch (OperationCanceledException)
-                    when (next.Cancellation.IsCancellationRequested)
-                {
-                    await UpdateAsync(next, job =>
-                    {
-                        job.Status = InstallStatus.Cancelled;
-                        job.Message = "Cancelled";
-                    });
-                }
-                catch (OperationCanceledException)
-                    when (linked.IsCancellationRequested)
-                {
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    await _log.ErrorAsync(
-                        $"Install failed for {next.DisplayName}.",
-                        ex);
-
-                    await UpdateAsync(next, job =>
-                    {
-                        job.Status = InstallStatus.Failed;
-                        job.Message = "Failed";
-                    });
-
-                    await ReportErrorAsync(
-                        $"Install failed: {next.DisplayName}",
-                        ex.Message,
-                        next);
-                }
-
-                await PersistAsync();
-            }
-        }
-        finally
-        {
-            _running = false;
-            _runGate.Release();
-        }
+        cancellationToken.ThrowIfCancellationRequested();
+        await _scheduler.RunAsync(includeWaiting: true, _lifetime.Token).WaitAsync(cancellationToken);
     }
 
+    public void NotifySettingsChanged() => _scheduler.Pulse();
+
+    private async Task<Task> StartJobWorkerAsync(InstallJob job, CancellationToken token)
+    {
+        var registered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var worker = RunJobWorkerAsync(job, token, registered);
+        await registered.Task;
+        return worker;
+    }
+
+    private async Task RunJobWorkerAsync(InstallJob job, CancellationToken token, TaskCompletionSource registered)
+    {
+        var recovering = job.Status is InstallStatus.Recovering or InstallStatus.Paused;
+        try
+        {
+            if (recovering) await RecoverJobAsync(job, token, registered);
+            else await ProcessJobAsync(job, token, registered);
+        }
+        catch (OperationCanceledException) when (job.Cancellation.IsCancellationRequested)
+        {
+            await UpdateAndPersistAsync(job, x =>
+            {
+                x.Status = InstallStatus.Cancelled;
+                x.Message = "Cancelled";
+            });
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (Exception ex)
+        {
+            await _log.ErrorAsync($"Queue job failed for {job.DisplayName}.", ex);
+            await UpdateAndPersistAsync(job, x =>
+            {
+                x.Status = InstallStatus.Failed;
+                x.Message = recovering ? "Recovery failed" : "Failed";
+                x.TransferRateBytesPerSecond = 0;
+                x.EtaSeconds = null;
+            });
+            await ReportErrorAsync($"Install failed: {job.DisplayName}", ex.Message, job);
+        }
+        finally { registered.TrySetResult(); }
+    }
     public async Task PauseAsync(InstallJob job)
     {
         if (!job.TaskId.HasValue ||
             job.Status != InstallStatus.Installing)
             return;
 
-        await _rpi.PauseAsync(job.TaskId.Value);
+        try { await _rpi.PauseAsync(job.TaskId.Value); }
+        catch (RpiException) { if (await CheckInstalledAsync(job)) return; throw; }
+        if (job.Status == InstallStatus.Completed) return;
 
         await UpdateAndPersistAsync(job, x =>
         {
@@ -295,7 +297,9 @@ public sealed class InstallQueueService : IAsyncDisposable
             job.Status != InstallStatus.Paused)
             return;
 
-        await _rpi.ResumeAsync(job.TaskId.Value);
+        try { await _rpi.ResumeAsync(job.TaskId.Value); }
+        catch (RpiException) { if (await CheckInstalledAsync(job)) return; throw; }
+        if (job.Status == InstallStatus.Completed) return;
 
         await UpdateAndPersistAsync(job, x =>
         {
@@ -325,9 +329,12 @@ public sealed class InstallQueueService : IAsyncDisposable
         {
             x.Status = InstallStatus.Cancelled;
             x.Message = "Cancelled";
+            x.TransferRateBytesPerSecond = 0;
+            x.EtaSeconds = null;
         });
 
         await PersistAsync();
+        await ReleasePackageRouteIfUnusedAsync(GetSavedRouteId(job));
     }
 
     public async Task RemoveAsync(InstallJob job)
@@ -349,29 +356,14 @@ public sealed class InstallQueueService : IAsyncDisposable
         await _ui.RunAsync(() => Jobs.Remove(job));
         await ReindexAsync();
         await PersistAsync();
+        await ReleasePackageRouteIfUnusedAsync(GetSavedRouteId(job));
     }
 
     public async Task ClearFinishedAsync()
     {
-        if (_ui is null)
-            throw new InvalidOperationException("UI dispatcher is not attached.");
-
-        await _ui.RunAsync(() =>
-        {
-            for (var i = Jobs.Count - 1; i >= 0; i--)
-            {
-                if (Jobs[i].Status is
-                    InstallStatus.Completed or
-                    InstallStatus.Cancelled or
-                    InstallStatus.Failed)
-                {
-                    Jobs.RemoveAt(i);
-                }
-            }
-        });
-
-        await ReindexAsync();
-        await PersistAsync();
+        var jobs = await GetJobsSnapshotAsync();
+        await RemoveManyAsync(jobs.Where(x => x.Status is
+            InstallStatus.Completed or InstallStatus.Cancelled or InstallStatus.Failed));
     }
 
     public async Task MoveUpAsync(InstallJob job)
@@ -564,6 +556,8 @@ public sealed class InstallQueueService : IAsyncDisposable
         await ReindexAsync();
         await PersistAsync();
 
+        foreach (var job in targets)
+            await ReleasePackageRouteIfUnusedAsync(GetSavedRouteId(job));
         return targets.Length;
     }
 
@@ -575,7 +569,8 @@ public sealed class InstallQueueService : IAsyncDisposable
 
     private async Task ProcessJobAsync(
         InstallJob job,
-        CancellationToken applicationToken)
+        CancellationToken applicationToken,
+        TaskCompletionSource registered)
     {
         using var linked =
             CancellationTokenSource.CreateLinkedTokenSource(
@@ -600,24 +595,24 @@ public sealed class InstallQueueService : IAsyncDisposable
         Uri packageUri;
         string? routeId = null;
 
-        if (job.SourceKind == InstallSourceKind.LocalFile)
-        {
-            await EnsureServerAsync(cancellationToken);
-            routeId = _server.Register(job.FilePath);
-            packageUri = _server.GetPackageUri(routeId);
-        }
-        else
-        {
-            packageUri = new Uri(job.RemoteUrl);
-        }
-
-        await UpdateAndPersistAsync(job, x =>
-        {
-            x.PackageUri = packageUri.AbsoluteUri;
-        });
-
         try
         {
+            if (job.SourceKind == InstallSourceKind.LocalFile)
+            {
+                await EnsureServerAsync(cancellationToken);
+                routeId = _server.Register(job.FilePath);
+                packageUri = _server.GetPackageUri(routeId);
+            }
+            else
+            {
+                packageUri = new Uri(job.RemoteUrl);
+            }
+
+            await UpdateAndPersistAsync(job, x =>
+            {
+                x.PackageUri = packageUri.AbsoluteUri;
+            });
+
             await UpdateAndPersistAsync(job, x =>
             {
                 x.Status = InstallStatus.Sending;
@@ -627,7 +622,9 @@ public sealed class InstallQueueService : IAsyncDisposable
             var taskId =
                 await _rpi.InstallDirectAsync(
                     [packageUri],
-                    cancellationToken);
+                    cancellationToken,
+                    job.ContentId,
+                    GetTaskSubType(job.Kind));
 
             await UpdateAndPersistAsync(job, x =>
             {
@@ -636,12 +633,13 @@ public sealed class InstallQueueService : IAsyncDisposable
                 x.Message = "Installing";
             });
 
+            registered.TrySetResult();
             await MonitorAsync(job, cancellationToken);
         }
         finally
         {
             if (routeId is not null)
-                _server.Unregister(routeId);
+                await ReleasePackageRouteIfUnusedAsync(routeId);
         }
     }
 
@@ -680,82 +678,17 @@ public sealed class InstallQueueService : IAsyncDisposable
 
     private async Task RecoverActiveJobsSafelyAsync()
     {
-        if (!await _runGate.WaitAsync(0))
-            return;
-
-        _running = true;
-
         try
         {
-            InstallJob[] recoveryJobs = [];
-
-            if (_ui is not null)
-            {
-                await _ui.RunAsync(() =>
-                {
-                    recoveryJobs = Jobs
-                        .Where(x =>
-                            x.Status is
-                                InstallStatus.Recovering or
-                                InstallStatus.Paused)
-                        .ToArray();
-                });
-            }
-
-            foreach (var job in recoveryJobs)
-            {
-                try
-                {
-                    await RecoverJobAsync(
-                        job,
-                        _lifetime.Token);
-                }
-                catch (OperationCanceledException)
-                    when (job.Cancellation.IsCancellationRequested)
-                {
-                    await UpdateAndPersistAsync(job, x =>
-                    {
-                        x.Status = InstallStatus.Cancelled;
-                        x.Message = "Cancelled";
-                    });
-                }
-                catch (OperationCanceledException)
-                    when (_lifetime.IsCancellationRequested)
-                {
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    await _log.ErrorAsync(
-                        $"Unable to recover interrupted task for {job.DisplayName}.",
-                        ex);
-
-                    await UpdateAndPersistAsync(job, x =>
-                    {
-                        x.Status = InstallStatus.Failed;
-                        x.Message = "Recovery failed";
-                    });
-
-                    await ReportErrorAsync(
-                        $"Recovery failed: {job.DisplayName}",
-                        ex.Message,
-                        job);
-                }
-            }
+            await _scheduler.RunAsync(_settings.Current.AutoStartPackages, _lifetime.Token);
         }
-        finally
-        {
-            _running = false;
-            _runGate.Release();
-        }
-
-        if (_settings.Current.AutoStartPackages)
-            _ = StartPendingSafelyAsync();
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (Exception ex) { await _log.ErrorAsync("Queue recovery failed.", ex); }
     }
-
     private async Task RecoverJobAsync(
         InstallJob job,
-        CancellationToken applicationToken)
+        CancellationToken applicationToken,
+        TaskCompletionSource registered)
     {
         using var linked =
             CancellationTokenSource.CreateLinkedTokenSource(
@@ -816,6 +749,7 @@ public sealed class InstallQueueService : IAsyncDisposable
                 });
             }
 
+            registered.TrySetResult();
             await MonitorAsync(
                 job,
                 cancellationToken);
@@ -823,14 +757,42 @@ public sealed class InstallQueueService : IAsyncDisposable
         finally
         {
             if (routeId is not null)
-                _server.Unregister(routeId);
+                await ReleasePackageRouteIfUnusedAsync(routeId);
         }
+    }
+
+    private static bool NeedsPackageSource(InstallJob job) =>
+        job.SourceKind == InstallSourceKind.LocalFile &&
+        job.Status is not InstallStatus.Completed and not InstallStatus.Cancelled &&
+        (!string.IsNullOrWhiteSpace(job.PackageUri) || job.Status == InstallStatus.Waiting);
+
+    private static string? GetSavedRouteId(InstallJob job) =>
+        job.SourceKind != InstallSourceKind.LocalFile ? null :
+        Uri.TryCreate(job.PackageUri, UriKind.Absolute, out var uri) &&
+        uri.AbsolutePath.StartsWith("/pkg/", StringComparison.OrdinalIgnoreCase)
+            ? uri.AbsolutePath[5..] :
+        File.Exists(job.FilePath) ? PkgHttpServer.GetRouteId(Path.GetFullPath(job.FilePath)) : null;
+
+    private async Task ReleasePackageRouteIfUnusedAsync(string? routeId)
+    {
+        if (routeId is null)
+            return;
+        var jobs = await GetJobsSnapshotAsync();
+        if (!jobs.Any(x => NeedsPackageSource(x) &&
+                           string.Equals(GetSavedRouteId(x), routeId, StringComparison.OrdinalIgnoreCase)))
+            _server.Unregister(routeId);
     }
 
     private async Task<string> RestorePackageRouteAsync(
         InstallJob job,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(job.PackageUri) && job.Status == InstallStatus.Waiting)
+        {
+            // Serve older queues whose Retry reset discarded the previous URL.
+            await EnsureServerAsync(cancellationToken);
+            return _server.Register(job.FilePath);
+        }
         if (string.IsNullOrWhiteSpace(job.PackageUri) ||
             !Uri.TryCreate(
                 job.PackageUri,
@@ -844,6 +806,10 @@ public sealed class InstallQueueService : IAsyncDisposable
             throw new InvalidOperationException(
                 "The interrupted local install does not contain a recoverable package-server URL.");
         }
+
+        var routeId = PkgHttpServer.GetRouteId(Path.GetFullPath(job.FilePath));
+        if (!string.Equals(savedUri.AbsolutePath, $"/pkg/{routeId}", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The saved package URL no longer matches the deterministic package route.");
 
         if (_server.IsRunning)
         {
@@ -864,9 +830,6 @@ public sealed class InstallQueueService : IAsyncDisposable
                 cancellationToken);
         }
 
-        var routeId =
-            _server.Register(job.FilePath);
-
         var restoredUri =
             _server.GetPackageUri(routeId);
 
@@ -877,12 +840,12 @@ public sealed class InstallQueueService : IAsyncDisposable
                 UriFormat.SafeUnescaped,
                 StringComparison.OrdinalIgnoreCase) != 0)
         {
-            _server.Unregister(routeId);
-
             throw new InvalidOperationException(
                 $"Unable to restore the exact package URL expected by the PS4. " +
                 $"Expected {savedUri}, restored {restoredUri}.");
         }
+
+        _server.Register(job.FilePath);
 
         await _log.InfoAsync(
             $"Restored package route for interrupted task: {restoredUri}");
@@ -1124,10 +1087,16 @@ public sealed class InstallQueueService : IAsyncDisposable
         var lastRateSample = DateTimeOffset.UtcNow;
         var smoothedRate = 0d;
         var successfulPollsSincePersist = 0;
+        var nextInstalledCheck = DateTimeOffset.UtcNow;
 
-        while (true)
+        while (job.Status != InstallStatus.Completed)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (DateTimeOffset.UtcNow >= nextInstalledCheck)
+            {
+                nextInstalledCheck = DateTimeOffset.UtcNow.AddSeconds(30);
+                if (await CheckInstalledAsync(job)) return;
+            }
 
             var delay =
                 GetProgressPollDelay(
@@ -1152,6 +1121,7 @@ public sealed class InstallQueueService : IAsyncDisposable
             catch (Exception ex)
                 when (!cancellationToken.IsCancellationRequested)
             {
+                if (job.Status == InstallStatus.Completed) return;
                 failures++;
 
                 var threshold =
@@ -1201,6 +1171,7 @@ public sealed class InstallQueueService : IAsyncDisposable
                     $"after {failures} failed request(s).");
             }
 
+            if (job.Status == InstallStatus.Completed) return;
             failures = 0;
             warningRaised = false;
 
@@ -1385,17 +1356,67 @@ public sealed class InstallQueueService : IAsyncDisposable
 
     private async Task CompleteJobAsync(InstallJob job)
     {
-        await UpdateAndPersistAsync(job, x =>
-        {
-            x.Progress = 100;
-            x.Status = InstallStatus.Completed;
-            x.Message = "Installed";
-            x.TransferRateBytesPerSecond = 0;
-            x.EtaSeconds = null;
-        });
+        await UpdateAndPersistAsync(job, SetCompleted);
 
         await _log.InfoAsync(
             $"Install completed: {job.DisplayName}");
+    }
+
+    private static void SetCompleted(InstallJob job)
+    {
+        job.Progress = 100;
+        job.Status = InstallStatus.Completed;
+        job.Message = "Installed";
+        job.TransferRateBytesPerSecond = 0;
+        job.EtaSeconds = null;
+    }
+
+    public async Task<bool> CheckInstalledAsync(InstallJob job)
+    {
+        var state = job.Status;
+        var taskId = job.TaskId;
+        if (await _installed.CheckAsync(job, _lifetime.Token) != InstalledPackageState.Installed)
+            return false;
+        if (_ui is null) return false;
+        var confirmed = false;
+        await _ui.RunAsync(() =>
+        {
+            // Serialize with Retry/Cancel and other UI actions after the network wait.
+            if (job.TaskId != taskId) return;
+            if (job.Status == InstallStatus.Completed) { confirmed = true; return; }
+            if (job.Status != state) return;
+            SetCompleted(job);
+            confirmed = true;
+        });
+        if (!confirmed) return false;
+        await PersistAsync();
+        await ReleasePackageRouteIfUnusedAsync(GetSavedRouteId(job));
+        return true;
+    }
+
+    private async Task ReconcileFailedJobsAsync()
+    {
+        var offset = 0;
+        try
+        {
+            while (!_lifetime.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(30), _lifetime.Token);
+                if (_ui is null) continue;
+                var failed = (await GetJobsSnapshotAsync()).Where(x => x.Status == InstallStatus.Failed &&
+                    x.SourceKind == InstallSourceKind.LocalFile && !string.IsNullOrWhiteSpace(x.PackageUri)).ToArray();
+                if (failed.Length == 0) continue;
+                foreach (var job in failed.Skip(offset % failed.Length).Concat(failed.Take(offset % failed.Length)).Take(4))
+                {
+                    try { await CheckInstalledAsync(job); }
+                    catch (Exception ex) when (!_lifetime.IsCancellationRequested)
+                    { await _log.WarningAsync("Install reconciliation unavailable: " + ex.Message); }
+                }
+                offset = (offset + 4) % failed.Length;
+            }
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (Exception ex) { await _log.WarningAsync("Install reconciliation stopped: " + ex.Message); }
     }
 
     private int GetProgressPollDelay(
@@ -1403,8 +1424,8 @@ public sealed class InstallQueueService : IAsyncDisposable
     {
         var normal =
             Math.Max(
-                1000,
-                _settings.Current.PollIntervalMs);
+                250,
+                _settings.Current.EffectivePollIntervalMs);
 
         if (consecutiveFailures <= 0)
             return normal;
@@ -1531,24 +1552,12 @@ public sealed class InstallQueueService : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _lifetime.Cancel();
-
-        // Let the active sender/recovery loop observe cancellation and leave
-        // its finally block before we dispose the server or semaphore. This
-        // preserves the active task state for restart recovery and avoids a
-        // late Release() against a disposed semaphore.
-        await _runGate.WaitAsync();
-
-        try
-        {
-            await PersistAsync();
-            await _server.DisposeAsync();
-        }
-        finally
-        {
-            _runGate.Release();
-            _runGate.Dispose();
-            _lifetime.Dispose();
-        }
+        await _reconciliation;
+        try { await _scheduler.DrainAsync(); } catch (OperationCanceledException) { }
+        await PersistAsync();
+        await _server.DisposeAsync();
+        _installed.Dispose();
+        _lifetime.Dispose();
     }
 }
 

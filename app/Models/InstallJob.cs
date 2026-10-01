@@ -152,6 +152,7 @@ public sealed class InstallJob : ObservableObject
             Raise(nameof(CanCancel));
             Raise(nameof(CanMove));
             Raise(nameof(CanRetry));
+            Raise(nameof(TransferDetailsText));
         }
     }
 
@@ -182,7 +183,7 @@ public sealed class InstallJob : ObservableObject
         get => _etaSeconds;
         set
         {
-            var normalized = value is < 0 ? null : value;
+            var normalized = value is >= 0 and < int.MaxValue ? value : null;
             if (Set(ref _etaSeconds, normalized))
                 Raise(nameof(TransferDetailsText));
         }
@@ -192,6 +193,8 @@ public sealed class InstallJob : ObservableObject
     {
         get
         {
+            if (Status is InstallStatus.Failed or InstallStatus.Cancelled or InstallStatus.Completed)
+                return "";
             var pieces = new List<string>(2);
 
             if (TransferRateBytesPerSecond > 0)
@@ -241,7 +244,7 @@ public sealed class InstallJob : ObservableObject
         }
 
         TaskId = null;
-        PackageUri = "";
+        // Keep the previous source available while a retry waits in the queue.
         Progress = 0;
         TransferRateBytesPerSecond = 0;
         EtaSeconds = null;

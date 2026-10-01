@@ -31,6 +31,9 @@ public sealed partial class SettingsPage : Page
         object sender,
         RoutedEventArgs e)
     {
+        foreach (var panel in new UIElement[] { PlayStationPanel, PackageServerPanel, RpiBehaviorPanel, GeneralPanel, HomebrewPanel, DiagnosticsPanel })
+            PkgRelay.Infrastructure.NativeMotion.ConfigureShowHide(panel);
+
         if (SettingsIndex.SelectedItem is null)
             SettingsIndex.SelectedItem = PlayStationNavItem;
     }
@@ -45,6 +48,8 @@ public sealed partial class SettingsPage : Page
 
             Ps4AddressBox.Text = settings.Ps4Address;
             RpiPortBox.Value = settings.RpiPort;
+            ResidentPortBox.Value = settings.ResidentRpiPort;
+            ResidentTokenBox.Password = settings.ResidentRpiToken;
             LocalAddressBox.Text = settings.LocalAddress;
             HttpPortBox.Value = settings.HttpPort;
             PackageFolderBox.Text = settings.PackageFolder;
@@ -52,6 +57,8 @@ public sealed partial class SettingsPage : Page
                 settings.ShowPkgListBorders;
             TimeoutBox.Value = settings.RequestTimeoutMs;
             PollIntervalBox.Value = settings.PollIntervalMs;
+            ProgressRateBox.SelectedIndex = Enum.IsDefined(settings.ProgressUpdateRate) ? (int)settings.ProgressUpdateRate : 0;
+            ConsoleQueueLimitBox.Value = Math.Clamp(settings.ConsoleQueueLimit, 1, 32);
             ProgressFailuresBox.Value =
                 settings.MaxProgressFailures;
             RecursiveScanToggle.IsOn =
@@ -188,6 +195,11 @@ public sealed partial class SettingsPage : Page
         ScheduleSave();
     }
 
+    private void ProgressRateSettingChanged(object sender, SelectionChangedEventArgs e)
+    {
+        PollIntervalBox.IsEnabled = ProgressRateBox.SelectedIndex == 0;
+        ScheduleSave();
+    }
     private void ScheduleSave()
     {
         if (_loadingSettings)
@@ -196,6 +208,8 @@ public sealed partial class SettingsPage : Page
         _saveTimer.Stop();
         _saveTimer.Start();
     }
+
+    private void ResidentTokenChanged(object sender, RoutedEventArgs e) => ScheduleSave();
 
     private async void SaveTimer_Tick(
         DispatcherQueueTimer sender,
@@ -222,6 +236,8 @@ public sealed partial class SettingsPage : Page
             Ps4AddressBox.Text.Trim();
         settings.RpiPort =
             ToInt(RpiPortBox.Value, 12800);
+        settings.ResidentRpiPort = ToInt(ResidentPortBox.Value, 12801);
+        settings.ResidentRpiToken = ResidentTokenBox.Password.Trim();
         settings.LocalAddress =
             LocalAddressBox.Text.Trim();
         settings.HttpPort =
@@ -234,6 +250,8 @@ public sealed partial class SettingsPage : Page
             ToInt(TimeoutBox.Value, 5000);
         settings.PollIntervalMs =
             ToInt(PollIntervalBox.Value, 2500);
+        settings.ProgressUpdateRate = (ProgressUpdateRate)Math.Clamp(ProgressRateBox.SelectedIndex, 0, 2);
+        settings.ConsoleQueueLimit = Math.Clamp(ToInt(ConsoleQueueLimitBox.Value, 4), 1, 32);
         settings.MaxProgressFailures =
             ToInt(ProgressFailuresBox.Value, 8);
         settings.RecursiveScan =
@@ -254,6 +272,7 @@ public sealed partial class SettingsPage : Page
         try
         {
             await App.Services.Settings.SaveAsync();
+            App.Services.Queue.NotifySettingsChanged();
 
             if (App.MainWindow is MainWindow window)
                 window.ApplySettings();

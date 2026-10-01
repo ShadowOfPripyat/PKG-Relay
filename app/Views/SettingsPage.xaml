@@ -2,6 +2,7 @@
     x:Class="PkgRelay.Views.SettingsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:motion="using:PkgRelay.Infrastructure"
     NavigationCacheMode="Required">
 
     <Grid Padding="24,0,24,24" RowSpacing="12">
@@ -22,7 +23,7 @@
                 Opacity="0.72"/>
         </StackPanel>
 
-        <InfoBar
+        <InfoBar motion:InfoBarMotion.IsEnabled="True"
             x:Name="ResultBar"
             Grid.Row="1"
             IsOpen="False"/>
@@ -162,6 +163,17 @@
                                 Maximum="65535"
                                 ValueChanged="NumberSettingChanged"/>
                         </Grid>
+
+                        <Expander Header="Installed-package verification (optional)">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="Confirm the exact installed PKG, including DLCs and updates, using the Orbis Toolz resident service. Pairing is automatic when Orbis Toolz is configured for this console on the same Windows account. Otherwise enter its pairing token below. Sending still uses the legacy RPI port."
+                                    TextWrapping="Wrap"/>
+                                <NumberBox x:Name="ResidentPortBox" Header="Resident service port"
+                                    Minimum="1" Maximum="65535" ValueChanged="NumberSettingChanged"/>
+                                <PasswordBox x:Name="ResidentTokenBox" Header="Resident pairing token"
+                                    PasswordChanged="ResidentTokenChanged"/>
+                            </StackPanel>
+                        </Expander>
 
                         <Grid ColumnSpacing="24">
                             <Grid.ColumnDefinitions>
@@ -429,13 +441,33 @@
                         </Grid>
 
                         <Grid ColumnSpacing="24">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="420"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="PS4 queue limit" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                                <TextBlock Text="Queue several packages before the first finishes. Set to 1 for sequential installs." TextWrapping="Wrap" Opacity="0.65"/>
+                            </StackPanel>
+                            <NumberBox x:Name="ConsoleQueueLimitBox" Grid.Column="1" Minimum="1" Maximum="32" SpinButtonPlacementMode="Compact" ValueChanged="NumberSettingChanged"/>
+                        </Grid>
+                        <Grid ColumnSpacing="24">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="420"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Progress updates" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                                <TextBlock Text="Fast checks up to two tasks per second; Realtime up to four, shared across the queue. Faster updates send more requests to the console." TextWrapping="Wrap" Opacity="0.65"/>
+                            </StackPanel>
+                            <ComboBox x:Name="ProgressRateBox" Grid.Column="1" HorizontalAlignment="Stretch" SelectionChanged="ProgressRateSettingChanged">
+                                <ComboBoxItem Content="Default"/>
+                                <ComboBoxItem Content="Fast"/>
+                                <ComboBoxItem Content="Realtime"/>
+                            </ComboBox>
+                        </Grid>
+                        <Grid ColumnSpacing="24">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="280"/>
                                 <ColumnDefinition Width="420"/>
                             </Grid.ColumnDefinitions>
 
                             <TextBlock
-                                Text="Progress polling interval"
+                                Text="Default progress interval (ms)"
                                 Style="{ThemeResource BodyStrongTextBlockStyle}"/>
 
                             <NumberBox
@@ -472,7 +504,7 @@
                                 ValueChanged="NumberSettingChanged"/>
                         </Grid>
 
-                        <InfoBar
+                        <InfoBar motion:InfoBarMotion.IsEnabled="True"
                             IsOpen="True"
                             IsClosable="False"
                             Severity="Informational"
@@ -565,7 +597,7 @@
                                     Text="Catalog URL"
                                     Style="{ThemeResource BodyStrongTextBlockStyle}"/>
                                 <TextBlock
-                                    Text="JSON catalog used by the optional Homebrew tab."
+                                    Text="Leave empty for official project releases, or enter a public JSON catalog URL."
                                     TextWrapping="Wrap"
                                     Opacity="0.65"/>
                             </StackPanel>
@@ -637,7 +669,7 @@
                             Height="24"
                             HorizontalAlignment="Left"/>
 
-                        <InfoBar
+                        <InfoBar motion:InfoBarMotion.IsEnabled="True"
                             x:Name="DiagnosticsResultBar"
                             IsOpen="False"/>
 

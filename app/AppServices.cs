@@ -15,6 +15,7 @@ public sealed class AppServices
     public Ps4RpiClient Rpi { get; }
     public DownloadService Downloads { get; }
     public HomebrewService Homebrew { get; }
+    public FpkgiDatabaseService FpkgiDatabases { get; }
     public NetworkDiagnosticsService Diagnostics { get; }
     public InstallQueueService Queue { get; }
     public PackageLibraryWatcherService LibraryWatcher { get; }
@@ -29,7 +30,8 @@ public sealed class AppServices
         QueueStore = new QueueStoreService(Settings);
         Rpi = new Ps4RpiClient(Settings, Log);
         Downloads = new DownloadService(Settings, Log);
-        Homebrew = new HomebrewService(Settings, Log);
+        Homebrew = new HomebrewService(Settings);
+        FpkgiDatabases = new FpkgiDatabaseService(Settings);
         Diagnostics = new NetworkDiagnosticsService(
             Settings,
             Network,
@@ -64,5 +66,6 @@ public sealed class AppServices
         Rpi.Dispose();
         Homebrew.Dispose();
         Downloads.Dispose();
+        FpkgiDatabases.Dispose();
     }
 }

@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\..\app\Infrastructure\ObservableObject.cs" Link="Production\ObservableObject.cs" />
+    <Compile Include="..\..\app\Services\Ps4RpiClient.cs" Link="Production\Ps4RpiClient.cs" />
+    <Compile Include="..\..\app\Services\InstallQueueService.cs" Link="Production\InstallQueueService.cs" />
+    <Compile Include="..\..\app\Services\PkgQueueScheduler.cs" Link="Production\PkgQueueScheduler.cs" />
+    <Compile Include="..\..\app\Services\ProgressRequestLimiter.cs" Link="Production\ProgressRequestLimiter.cs" />
+    <Compile Include="..\..\app\Models\ProgressUpdateRate.cs" Link="Production\ProgressUpdateRate.cs" />
+    <Compile Include="..\..\app\Services\NetworkService.cs" Link="Production\NetworkService.cs" />
+    <Compile Include="..\..\app\Infrastructure\UiDispatcher.cs" Link="Production\UiDispatcher.cs" />
+    <Compile Include="..\..\app\Services\RpiInstallRecovery.cs" Link="Production\RpiInstallRecovery.cs" />
+    <Compile Include="..\..\app\Models\AppSettings.cs" Link="Production\AppSettings.cs" />
+    <Compile Include="..\..\app\Models\InstallJob.cs" Link="Production\InstallJob.cs" />
+    <Compile Include="..\..\app\Models\PkgMetadata.cs" Link="Production\PkgMetadata.cs" />
+    <Compile Include="..\..\app\Models\RpiProgress.cs" Link="Production\RpiProgress.cs" />
+    <Compile Include="..\..\app\Services\PkgMetadataService.cs" Link="Production\PkgMetadataService.cs" />
+    <Compile Include="..\..\app\Services\RpiJson.cs" Link="Production\RpiJson.cs" />
+    <Compile Include="..\..\app\Services\QueueStoreService.cs" Link="Production\QueueStoreService.cs" />
+    <Compile Include="..\..\app\Services\SettingsService.cs" Link="Production\SettingsService.cs" />
+    <Compile Include="..\..\app\Services\LogService.cs" Link="Production\LogService.cs" />
+    <Compile Include="..\..\app\Services\PkgHttpServer.cs" Link="Production\PkgHttpServer.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\..\app\Models\HomebrewItem.cs" Link="Production\HomebrewItem.cs" />
+    <Compile Include="..\..\app\Services\HomebrewService.cs" Link="Production\HomebrewService.cs" />
+    <Compile Include="..\..\app\Services\HomebrewCatalog.cs" Link="Production\HomebrewCatalog.cs" />
+    <Compile Include="..\..\app\Services\DownloadService.cs" Link="Production\DownloadService.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.12" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../app/Models/HomebrewApp.cs" Link="HomebrewApp.cs" />
+    <Compile Include="../../app/Services/HomebrewStoreDatabase.cs" Link="HomebrewStoreDatabase.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../app/Services/FpkgiDatabaseService.cs" Link="FpkgiDatabaseService.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../app/Services/InstalledPackageVerifier.cs" Link="Production/InstalledPackageVerifier.cs" />
+  </ItemGroup>
+</Project>

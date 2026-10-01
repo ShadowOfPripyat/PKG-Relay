@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace PkgRelay.Services;
 
@@ -15,6 +16,7 @@ public sealed class PkgHttpServer : IAsyncDisposable
         new(StringComparer.OrdinalIgnoreCase);
 
     private readonly LogService _log;
+    private readonly SemaphoreSlim _gate = new(1, 1);
     private WebApplication? _app;
 
     public bool IsRunning => _app is not null;
@@ -41,7 +43,7 @@ public sealed class PkgHttpServer : IAsyncDisposable
             throw new InvalidOperationException("Only .pkg files can be served.");
         }
 
-        var id = CreateId(fullPath);
+        var id = GetRouteId(fullPath);
         _files[id] = fullPath;
         return id;
     }
@@ -64,10 +66,33 @@ public sealed class PkgHttpServer : IAsyncDisposable
         int port,
         CancellationToken cancellationToken = default)
     {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            if (_app is not null && (Port != port || !address.Equals(Address)))
+                throw new InvalidOperationException(
+                    $"Package server is already running on {Address}:{Port}; it cannot move to {address}:{port} while routes are active.");
+
+            await StartCoreAsync(address, port, cancellationToken);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task StartCoreAsync(
+        IPAddress address,
+        int port,
+        CancellationToken cancellationToken)
+    {
         if (_app is not null)
             return;
 
         var builder = WebApplication.CreateSlimBuilder();
+
+        builder.Logging.ClearProviders();
+        builder.Logging.AddDebug();
 
         builder.WebHost.ConfigureKestrel(options =>
         {
@@ -102,7 +127,15 @@ public sealed class PkgHttpServer : IAsyncDisposable
                     enableRangeProcessing: true);
             });
 
-        await app.StartAsync(cancellationToken);
+        try
+        {
+            await app.StartAsync(cancellationToken);
+        }
+        catch
+        {
+            await app.DisposeAsync();
+            throw;
+        }
 
         _app = app;
         Address = address;
@@ -114,6 +147,19 @@ public sealed class PkgHttpServer : IAsyncDisposable
     public async Task StopAsync(
         CancellationToken cancellationToken = default)
     {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            await StopCoreAsync(cancellationToken);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task StopCoreAsync(CancellationToken cancellationToken)
+    {
         var app = _app;
         if (app is null)
             return;
@@ -123,10 +169,10 @@ public sealed class PkgHttpServer : IAsyncDisposable
         try
         {
             await app.StopAsync(cancellationToken);
-            await app.DisposeAsync();
         }
         finally
         {
+            await app.DisposeAsync();
             await _log.InfoAsync("PKG server stopped.");
             Address = null;
             Port = 0;
@@ -138,7 +184,7 @@ public sealed class PkgHttpServer : IAsyncDisposable
         return new ValueTask(StopAsync());
     }
 
-    private static string CreateId(string path)
+    internal static string GetRouteId(string path)
     {
         var fingerprint = $"{path.ToUpperInvariant()}|{new FileInfo(path).Length}";
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(fingerprint));

@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
+using PkgRelay.Infrastructure;
 using PkgRelay.Views;
 
 namespace PkgRelay;
@@ -121,6 +122,7 @@ public sealed partial class MainWindow : Window
         {
             "pkg" => typeof(PkgPage),
             "homebrew" => typeof(HomebrewPage),
+            "tools" => typeof(ToolsPage),
             "settings" => typeof(SettingsPage),
             _ => typeof(PkgPage)
         };
@@ -133,7 +135,7 @@ public sealed partial class MainWindow : Window
                 !ContentFrame.Navigate(
                     page,
                     null,
-                    new EntranceNavigationTransitionInfo()))
+                    NativeMotion.IsEnabled ? new EntranceNavigationTransitionInfo() : new SuppressNavigationTransitionInfo()))
             {
                 throw new InvalidOperationException(
                     $"Navigation to {page.Name} returned false.");

@@ -6,6 +6,7 @@ namespace PkgRelay.Services;
 public sealed class QueueStoreService
 {
     private readonly string _path;
+    private readonly SemaphoreSlim _gate = new(1, 1);
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -13,12 +14,26 @@ public sealed class QueueStoreService
         PropertyNameCaseInsensitive = true
     };
 
-    public QueueStoreService(SettingsService settings)
+    public QueueStoreService(SettingsService settings) : this(settings.DataDirectory)
     {
-        _path = Path.Combine(settings.DataDirectory, "queue.json");
     }
 
+    internal QueueStoreService(string dataDirectory) => _path = Path.Combine(dataDirectory, "queue.json");
+
     public async Task SaveAsync(IEnumerable<InstallJob> jobs)
+    {
+        await _gate.WaitAsync();
+        try
+        {
+            await SaveCoreAsync(jobs);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task SaveCoreAsync(IEnumerable<InstallJob> jobs)
     {
         var persisted = jobs
             .Where(x => x.Status is not InstallStatus.Completed)
@@ -49,18 +64,39 @@ public sealed class QueueStoreService
 
         var temporary = _path + ".tmp";
 
-        await using (var stream = File.Create(temporary))
+        try
         {
-            await JsonSerializer.SerializeAsync(
-                stream,
-                persisted,
-                JsonOptions);
-        }
+            await using (var stream = File.Create(temporary))
+            {
+                await JsonSerializer.SerializeAsync(
+                    stream,
+                    persisted,
+                    JsonOptions);
+            }
 
-        File.Move(temporary, _path, true);
+            File.Move(temporary, _path, true);
+        }
+        finally
+        {
+            if (File.Exists(temporary))
+                File.Delete(temporary);
+        }
     }
 
     public async Task<IReadOnlyList<InstallJob>> LoadAsync()
+    {
+        await _gate.WaitAsync();
+        try
+        {
+            return await LoadCoreAsync();
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task<IReadOnlyList<InstallJob>> LoadCoreAsync()
     {
         if (!File.Exists(_path))
             return [];
@@ -141,9 +177,14 @@ public sealed class QueueStoreService
                 when entry.TaskId.HasValue
                 => InstallStatus.Paused,
 
-            InstallStatus.Preparing or
             InstallStatus.Sending
+                => InstallStatus.Recovering,
+
+            InstallStatus.Preparing
+                when !entry.TaskId.HasValue && string.IsNullOrWhiteSpace(entry.PackageUri)
                 => InstallStatus.Waiting,
+
+            InstallStatus.Preparing => InstallStatus.Recovering,
 
             InstallStatus.Completed
                 => InstallStatus.Completed,

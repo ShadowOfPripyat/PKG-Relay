@@ -1,0 +1,66 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    <RootNamespace>PkgRelay</RootNamespace>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <EnableMsixTooling>false</EnableMsixTooling>
+    <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
+    <SelfContained>false</SelfContained>
+    <WindowsAppSdkBootstrapInitialize>true</WindowsAppSdkBootstrapInitialize>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <Page Include="../../app/Views/HomebrewPage.xaml" Link="Views/HomebrewPage.xaml" />
+    <Compile Include="../../app/Views/HomebrewPage.xaml.cs" Link="Views/HomebrewPage.xaml.cs" />
+    <Compile Include="../../app/Infrastructure/NativeMotion.cs" Link="NativeMotion.cs" />
+    <Compile Include="../../app/Infrastructure/InfoBarMotion.cs" Link="InfoBarMotion.cs" />
+    <Compile Include="../../app/Infrastructure/HomebrewImageConverter.cs" Link="HomebrewImageConverter.cs" />
+    <Compile Include="../../app/Services/HomebrewService.cs" Link="HomebrewService.cs" />
+    <Compile Include="../../app/Services/HomebrewCatalog.cs" Link="HomebrewCatalog.cs" />
+    <Compile Include="../../app/Services/SettingsService.cs" Link="SettingsService.cs" />
+    <Compile Include="../../app/Services/DownloadService.cs" Link="DownloadService.cs" />
+    <Compile Include="../../app/Services/LogService.cs" Link="LogService.cs" />
+    <Compile Include="../../app/Models/HomebrewItem.cs" Link="HomebrewItem.cs" />
+    <Compile Include="../../app/Models/AppSettings.cs" Link="AppSettings.cs" />
+    <Compile Include="../../app/Models/ProgressUpdateRate.cs" Link="ProgressUpdateRate.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.12" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../app/Models/HomebrewApp.cs" Link="HomebrewApp.cs" />
+    <Compile Include="../../app/Services/HomebrewStoreDatabase.cs" Link="HomebrewStoreDatabase.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../app/Infrastructure/SkeletonMotion.cs" Link="SkeletonMotion.cs" />
+    <Compile Include="../../app/Views/HomebrewBrowser.cs" Link="HomebrewBrowser.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../app/Services/FpkgiDatabaseService.cs" Link="FpkgiDatabaseService.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Page Include="../../app/Views/FpkgiDatabaseTool.xaml" Link="Views/FpkgiDatabaseTool.xaml" />
+    <Compile Include="../../app/Views/FpkgiDatabaseTool.xaml.cs" Link="Views/FpkgiDatabaseTool.xaml.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Page Include="../../app/Views/InstallStatusBadge.xaml" Link="Views/InstallStatusBadge.xaml" />
+    <Compile Include="../../app/Views/InstallStatusBadge.xaml.cs" Link="Views/InstallStatusBadge.xaml.cs" />
+    <Compile Include="../../app/Models/InstallJob.cs" Link="Models/InstallJob.cs" />
+    <Compile Include="../../app/Infrastructure/ObservableObject.cs" Link="Infrastructure/ObservableObject.cs" />
+    <Compile Include="../../app/Converters/InstallStatusBrushConverter.cs" Link="Converters/InstallStatusBrushConverter.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../app/Models/PkgMetadata.cs" Link="Models/PkgMetadata.cs" />
+  </ItemGroup>
+</Project>

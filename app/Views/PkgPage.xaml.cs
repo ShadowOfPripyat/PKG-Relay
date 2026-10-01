@@ -60,6 +60,8 @@ public sealed partial class PkgPage : Page
 
     private void PkgPage_Loaded(object sender, RoutedEventArgs e)
     {
+        PkgRelay.Infrastructure.NativeMotion.ConfigureShowHide(SelectionActionsPanel);
+        PkgRelay.Infrastructure.NativeMotion.ConfigureShowHide(EmptyQueueDropSurface);
         if (!_jobsSubscribed)
         {
             Queue.Jobs.CollectionChanged += Jobs_CollectionChanged;
@@ -809,6 +811,21 @@ public sealed partial class PkgPage : Page
         {
             ShowError("Unable to pause package", ex.Message);
         }
+    }
+
+    private async void CheckInstalled_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: InstallJob job }) return;
+        try
+        {
+            var installed = await Queue.CheckInstalledAsync(job);
+            StatusBar.Title = installed ? "Installation confirmed" : "Installation not confirmed";
+            StatusBar.Message = installed ? $"{job.DisplayName} is installed on the PS4." :
+                "The exact PKG could not be confirmed. Run the updated Orbis Toolz service and check verification settings if needed. The package may still be installing.";
+            StatusBar.Severity = installed ? InfoBarSeverity.Success : InfoBarSeverity.Informational;
+            StatusBar.IsOpen = true;
+        }
+        catch (Exception ex) { ShowError("Unable to check installation", ex.Message); }
     }
 
     private async void Resume_Click(object sender, RoutedEventArgs e)

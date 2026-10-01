@@ -2,6 +2,7 @@
     x:Class="PkgRelay.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:motion="using:PkgRelay.Infrastructure"
     Title="PKG Relay">
 
     <Window.SystemBackdrop>
@@ -77,6 +78,9 @@
                     </SelectorBarItem.Icon>
                 </SelectorBarItem>
 
+                <SelectorBarItem Text="Tools" Tag="tools" ToolTipService.ToolTip="FPKGi database tools">
+                    <SelectorBarItem.Icon><FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE90F;"/></SelectorBarItem.Icon>
+                </SelectorBarItem>
                 <SelectorBarItem
                     x:Name="SettingsSelectorItem"
                     Text="Settings"
@@ -98,7 +102,7 @@
                 VerticalAlignment="Center"/>
         </Grid>
 
-        <InfoBar
+        <InfoBar motion:InfoBarMotion.IsEnabled="True"
             x:Name="ShellInfoBar"
             Grid.Row="2"
             Margin="24,0,24,0"

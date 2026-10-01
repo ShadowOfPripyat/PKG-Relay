@@ -8,6 +8,9 @@ public static class RpiJson
 {
     public static JsonDocument Parse(string raw)
     {
+        if (string.IsNullOrWhiteSpace(raw))
+            throw new JsonException("RPI returned an empty response.");
+
         try
         {
             return JsonDocument.Parse(raw);
@@ -68,10 +71,14 @@ public static class RpiJson
                 if (end > start)
                 {
                     var hex = input[start..end];
-                    var value = ulong.Parse(
+                    if (!ulong.TryParse(
                         hex,
                         NumberStyles.HexNumber,
-                        CultureInfo.InvariantCulture);
+                        CultureInfo.InvariantCulture,
+                        out var value))
+                    {
+                        throw new JsonException("RPI returned an unsupported hexadecimal number.");
+                    }
 
                     output.Append(
                         value.ToString(CultureInfo.InvariantCulture));

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 
 namespace PkgRelay.Models;
@@ -42,19 +43,28 @@ public sealed record RpiProgress(
 
     public static RpiProgress FromJson(JsonElement root)
     {
+        if (root.ValueKind != JsonValueKind.Object)
+            throw new JsonException("RPI progress response must be a JSON object.");
+
         return new RpiProgress(
             GetLong(root, "bits"),
-            GetLong(root, "error", "error_result"),
+            GetLong(root, "error_result", "error"),
             GetLong(root, "length"),
             GetLong(root, "transferred"),
             GetLong(root, "length_total"),
             GetLong(root, "transferred_total"),
             (int)GetLong(root, "num_index"),
             (int)GetLong(root, "num_total"),
-            (int)GetLong(root, "rest_sec"),
-            (int)GetLong(root, "rest_sec_total"),
+            GetRemainingSeconds(root, "rest_sec"),
+            GetRemainingSeconds(root, "rest_sec_total"),
             (int)GetLong(root, "preparing_percent"),
             (int)GetLong(root, "local_copy_percent"));
+    }
+
+    private static int GetRemainingSeconds(JsonElement root, string name)
+    {
+        var value = GetLong(root, name);
+        return value is >= 0 and < int.MaxValue ? (int)value : -1;
     }
 
     private static long GetLong(JsonElement root, params string[] names)
@@ -68,9 +78,21 @@ public sealed record RpiProgress(
                 value.TryGetInt64(out var numeric))
                 return numeric;
 
-            if (value.ValueKind == JsonValueKind.String &&
-                long.TryParse(value.GetString(), out numeric))
-                return numeric;
+            if (value.ValueKind == JsonValueKind.String)
+            {
+                var text = value.GetString()?.Trim();
+                if (string.IsNullOrWhiteSpace(text))
+                    continue;
+
+                if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase) &&
+                    long.TryParse(text.AsSpan(2), NumberStyles.HexNumber,
+                        CultureInfo.InvariantCulture, out numeric))
+                    return numeric;
+
+                if (long.TryParse(text, NumberStyles.Integer,
+                        CultureInfo.InvariantCulture, out numeric))
+                    return numeric;
+            }
         }
 
         return 0;

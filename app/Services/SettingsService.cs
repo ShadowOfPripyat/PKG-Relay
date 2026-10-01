@@ -13,13 +13,18 @@ public sealed class SettingsService
 
     private readonly string _directory;
     private readonly string _path;
+    private readonly SemaphoreSlim _ioGate = new(1, 1);
 
     public string DataDirectory => _directory;
     public AppSettings Current { get; private set; } = new();
 
-    public SettingsService()
+    public SettingsService() : this(null)
     {
-        _directory = Path.Combine(
+    }
+
+    internal SettingsService(string? dataDirectory)
+    {
+        _directory = dataDirectory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "PKG Relay");
 
@@ -28,11 +33,18 @@ public sealed class SettingsService
 
     public async Task LoadAsync()
     {
+        await _ioGate.WaitAsync();
+        try { await LoadCoreAsync(); }
+        finally { _ioGate.Release(); }
+    }
+
+    private async Task LoadCoreAsync()
+    {
         Directory.CreateDirectory(_directory);
 
         if (!File.Exists(_path))
         {
-            await SaveAsync();
+            await SaveCoreAsync();
             return;
         }
 
@@ -52,6 +64,13 @@ public sealed class SettingsService
     }
 
     public async Task SaveAsync()
+    {
+        await _ioGate.WaitAsync();
+        try { await SaveCoreAsync(); }
+        finally { _ioGate.Release(); }
+    }
+
+    private async Task SaveCoreAsync()
     {
         Directory.CreateDirectory(_directory);
 

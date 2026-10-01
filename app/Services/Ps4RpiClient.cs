@@ -10,6 +10,7 @@ public sealed class Ps4RpiClient : IDisposable
     private readonly SettingsService _settings;
     private readonly LogService _log;
     private readonly HttpClient _http;
+    private readonly ProgressRequestLimiter _progressLimiter = new();
 
     public Ps4RpiClient(SettingsService settings, LogService log)
     {
@@ -57,30 +58,39 @@ public sealed class Ps4RpiClient : IDisposable
 
     public async Task<int> InstallDirectAsync(
         IReadOnlyCollection<Uri> packages,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string contentId = "",
+        int taskSubType = 6)
     {
-        using var document = await PostAsync(
-            "install",
+        if (packages.Count == 0)
+            throw new ArgumentException("At least one package URL is required.", nameof(packages));
+
+        using var document = await RpiInstallRecovery.PostInstallAsync(
+            PostAsync,
             new
             {
                 type = "direct",
                 packages = packages.Select(x => x.AbsoluteUri).ToArray()
             },
+            contentId,
+            taskSubType,
+            _log.WarningAsync,
             cancellationToken);
 
-        if (!document.RootElement.TryGetProperty("task_id", out var taskId))
-            throw new RpiException("RPI did not return a task_id.");
+        if (!document.RootElement.TryGetProperty("task_id", out var taskId) ||
+            !taskId.TryGetInt32(out var id) || id < 0)
+            throw new RpiException("RPI did not return a valid task_id. The package may already be installed.");
 
-        return taskId.GetInt32();
+        return id;
     }
 
     public async Task<RpiProgress> GetProgressAsync(
         int taskId,
         CancellationToken cancellationToken = default)
     {
-        using var document = await PostAsync(
-            "get_task_progress",
-            new { task_id = taskId },
+        using var document = await _progressLimiter.ExecuteAsync(
+            () => _settings.Current.EffectivePollIntervalMs,
+            () => PostAsync("get_task_progress", new { task_id = taskId }, cancellationToken),
             cancellationToken);
 
         return RpiProgress.FromJson(document.RootElement);
@@ -179,14 +189,22 @@ public sealed class Ps4RpiClient : IDisposable
         if (!response.IsSuccessStatusCode)
         {
             throw new RpiException(
-                $"RPI returned HTTP {(int)response.StatusCode}: {responseText}");
+                $"RPI returned HTTP {(int)response.StatusCode}: {responseText}",
+                RpiInstallRecovery.ReadError(responseText));
         }
 
         try
         {
-            return RpiJson.Parse(responseText);
+            var document = RpiJson.Parse(responseText);
+            if (RpiInstallRecovery.IsErrorResponse(document.RootElement))
+            {
+                var error = RpiInstallRecovery.ReadError(document.RootElement);
+                document.Dispose();
+                throw new RpiException($"RPI rejected /api/{route}: {responseText}", error);
+            }
+            return document;
         }
-        catch (Exception ex)
+        catch (JsonException ex)
         {
             throw new RpiException(
                 $"Unable to parse RPI response: {responseText}",
@@ -199,7 +217,10 @@ public sealed class Ps4RpiClient : IDisposable
 
 public sealed class RpiException : Exception
 {
+    public int? ErrorResult { get; }
     public RpiException(string message) : base(message) { }
+
+    public RpiException(string message, int? errorResult) : base(message) => ErrorResult = errorResult;
 
     public RpiException(string message, Exception innerException)
         : base(message, innerException) { }
